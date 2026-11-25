@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Listening Player</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --surface: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --primary: #1d4ed8;
+      --primary-hover: #1e40af;
+      --playing: #047857;
+      --disabled: #d1d5db;
+      --danger: #b91c1c;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 560px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+
+    .tracks-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 520px) {
+      .tracks-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .track-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .track-card.is-playing {
+      border-color: var(--playing);
+      box-shadow: 0 6px 18px rgba(4, 120, 87, 0.12);
+    }
+
+    .track-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 24px;
+      color: var(--text);
+    }
+
+    .play-btn {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      border: none;
+      background: var(--primary);
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.15s ease;
+      box-shadow: 0 4px 10px rgba(29, 78, 216, 0.25);
+    }
+
+    .play-btn:hover:not(:disabled) {
+      background: var(--primary-hover);
+      transform: scale(1.04);
+    }
+
+    .play-btn:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    .play-btn.playing {
+      background: var(--playing);
+      box-shadow: 0 4px 12px rgba(4, 120, 87, 0.28);
+      cursor: default;
+    }
+
+    .play-btn:disabled:not(.playing) {
+      background: var(--disabled);
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    .play-btn svg {
+      width: 30px;
+      height: 30px;
+      fill: currentColor;
+    }
+
+    .play-btn svg.play-icon {
+      margin-left: 4px;
+    }
+
+    .status-text {
+      margin-top: 18px;
+      font-size: 0.875rem;
+      color: var(--muted);
+      min-height: 20px;
+    }
+
+    .status-text.active {
+      color: var(--playing);
+      font-weight: 600;
+    }
+
+    .status-text.locked {
+      color: var(--danger);
+      font-weight: 500;
+    }
+
+    /* Subtle Teacher Login Trigger */
+    .teacher-footer {
+      margin-top: 40px;
+      text-align: center;
+    }
+
+    .teacher-link {
+      background: none;
+      border: none;
+      color: #9ca3af;
+      font-size: 0.8rem;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 6px 12px;
+    }
+
+    .teacher-link:hover {
+      color: var(--text);
+    }
+
+    /* Teacher Modal / Panel */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(17, 24, 39, 0.55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 100;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--surface);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 500px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 24px;
+      box-shadow: 0 20px 35px rgba(0, 0, 0, 0.18);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .modal-header h2 {
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 1.4rem;
+      color: var(--muted);
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+      text-align: left;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="password"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.95rem;
+    }
+
+    .form-group input[type="file"] {
+      width: 100%;
+      font-size: 0.875rem;
+      padding: 6px 0;
+    }
+
+    .section-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+
+    .section-box h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: var(--primary);
+    }
+
+    .btn {
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-hover);
+    }
+
+    .btn-secondary {
+      background: #e5e7eb;
+      color: var(--text);
+    }
+
+    .btn-danger {
+      background: #fee2e2;
+      color: var(--danger);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .note {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.45;
+      margin-top: 8px;
+    }
+
+    .error-msg {
+      color: var(--danger);
+      font-size: 0.85rem;
+      margin-top: 6px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1 id="pageHeading">Listening Comprehension</h1>
+    </header>
+
+    <div class="tracks-grid">
+      <!-- Track 1 -->
+      <div class="track-card" id="card-1">
+        <div class="track-title" id="title-1">Track 1</div>
+        <button class="play-btn" id="btn-1" aria-label="Play Track 1">
+          <svg class="play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <div class="status-text" id="status-1">2 plays left</div>
+      </div>
+
+      <!-- Track 2 -->
+      <div class="track-card" id="card-2">
+        <div class="track-title" id="title-2">Track 2</div>
+        <button class="play-btn" id="btn-2" aria-label="Play Track 2">
+          <svg class="play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <div class="status-text" id="status-2">2 plays left</div>
+      </div>
+    </div>
+
+    <div class="teacher-footer">
+      <button class="teacher-link" id="openTeacherBtn">Teacher Login</button>
+    </div>
+  </div>
+
+  <!-- Teacher Login & Content Manager Modal -->
+  <div class="modal-backdrop" id="teacherModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modalTitle">Teacher Login</h2>
+        <button class="close-btn" id="closeModalBtn" aria-label="Close">&times;</button>
+      </div>
+
+      <!-- Login View -->
+      <div id="loginView">
+        <div class="form-group">
+          <label for="pinInput">Enter Teacher PIN (Default: 1234)</label>
+          <input type="password" id="pinInput" placeholder="Enter PIN" />
+          <div class="error-msg" id="loginError">Incorrect PIN. Please try again.</div>
+        </div>
+        <button class="btn btn-primary" id="loginSubmitBtn">Log In</button>
+      </div>
+
+      <!-- Settings View -->
+      <div id="settingsView" style="display: none;">
+        <div class="form-group">
+          <label for="headingInput">Page Title</label>
+          <input type="text" id="headingInput" value="Listening Comprehension" />
+        </div>
+
+        <div class="section-box">
+          <h3>Track 1 Settings</h3>
+          <div class="form-group">
+            <label for="titleInput1">Track 1 Title</label>
+            <input type="text" id="titleInput1" value="Track 1" />
+          </div>
+          <div class="form-group">
+            <label for="urlInput1">Audio File Path or URL (e.g. track1.mp3)</label>
+            <input type="text" id="urlInput1" placeholder="track1.mp3" />
+          </div>
+          <div class="form-group">
+            <label for="fileInput1">Or Upload MP3 Directly (stored in this browser)</label>
+            <input type="file" id="fileInput1" accept="audio/*" />
+          </div>
+        </div>
+
+        <div class="section-box">
+          <h3>Track 2 Settings</h3>
+          <div class="form-group">
+            <label for="titleInput2">Track 2 Title</label>
+            <input type="text" id="titleInput2" value="Track 2" />
+          </div>
+          <div class="form-group">
+            <label for="urlInput2">Audio File Path or URL (e.g. track2.mp3)</label>
+            <input type="text" id="urlInput2" placeholder="track2.mp3" />
+          </div>
+          <div class="form-group">
+            <label for="fileInput2">Or Upload MP3 Directly (stored in this browser)</label>
+            <input type="file" id="fileInput2" accept="audio/*" />
+          </div>
+        </div>
+
+        <div class="section-box">
+          <h3>Security & Student Reset</h3>
+          <div class="form-group">
+            <label for="newPinInput">Change Teacher PIN</label>
+            <input type="text" id="newPinInput" placeholder="1234" />
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-danger" id="resetCountsBtn">Reset Student Play Counts (0/2)</button>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="saveSettingsBtn">Save Changes</button>
+          <button class="btn btn-secondary" id="exportHtmlBtn">Download Pre-Configured HTML</button>
+        </div>
+
+        <p class="note">
+          <strong>Sharing Tip:</strong> Put your <code>track1.mp3</code> and <code>track2.mp3</code> in the same folder as this HTML file, set their filenames above, and click <strong>Download Pre-Configured HTML</strong>. Upload that folder to GitHub Pages or Netlify Drop so all students get your updated tracks automatically.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden Audio Elements (No native controls, no speed change, no scrubbing) -->
+  <audio id="audio-1" preload="auto"></audio>
+  <audio id="audio-2" preload="auto"></audio>
+
+  <script>
+    // =========================================================================
+    // DEFAULT CONFIGURATION (Updated automatically when you export HTML)
+    // =========================================================================
+    const DEFAULT_CONFIG = {
+      heading: "Listening Comprehension",
+      pin: "1234",
+      tracks: {
+        1: { title: "Track 1", src: "track1.mp3" },
+        2: { title: "Track 2", src: "track2.mp3" }
+      }
+    };
+
+    const MAX_PLAYS = 2;
+    const STORAGE_KEY_CFG = "locked_audio_player_config_v1";
+    const STORAGE_KEY_COUNTS = "locked_audio_player_counts_v1";
+
+    // State
+    let config = loadConfig();
+    let playCounts = loadCounts();
+    let activeTrack = null; // 1 or 2 when currently playing
+    let intendedPlaying = { 1: false, 2: false };
+    let lastKnownTime = { 1: 0, 2: 0 };
+
+    // DOM Elements
+    const els = {
+      heading: document.getElementById("pageHeading"),
+      cards: { 1: document.getElementById("card-1"), 2: document.getElementById("card-2") },
+      titles: { 1: document.getElementById("title-1"), 2: document.getElementById("title-2") },
+      btns: { 1: document.getElementById("btn-1"), 2: document.getElementById("btn-2") },
+      statuses: { 1: document.getElementById("status-1"), 2: document.getElementById("status-2") },
+      audios: { 1: document.getElementById("audio-1"), 2: document.getElementById("audio-2") },
+      // Modal
+      modal: document.getElementById("teacherModal"),
+      modalTitle: document.getElementById("modalTitle"),
+      openTeacherBtn: document.getElementById("openTeacherBtn"),
+      closeModalBtn: document.getElementById("closeModalBtn"),
+      loginView: document.getElementById("loginView"),
+      settingsView: document.getElementById("settingsView"),
+      pinInput: document.getElementById("pinInput"),
+      loginError: document.getElementById("loginError"),
+      loginSubmitBtn: document.getElementById("loginSubmitBtn"),
+      // Settings inputs
+      headingInput: document.getElementById("headingInput"),
+      titleInput1: document.getElementById("titleInput1"),
+      urlInput1: document.getElementById("urlInput1"),
+      fileInput1: document.getElementById("fileInput1"),
+      titleInput2: document.getElementById("titleInput2"),
+      urlInput2: document.getElementById("urlInput2"),
+      fileInput2: document.getElementById("fileInput2"),
+      newPinInput: document.getElementById("newPinInput"),
+      resetCountsBtn: document.getElementById("resetCountsBtn"),
+      saveSettingsBtn: document.getElementById("saveSettingsBtn"),
+      exportHtmlBtn: document.getElementById("exportHtmlBtn")
+    };
+
+    const PLAY_SVG = '<svg class="play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+    const PLAYING_SVG = '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>';
+    const LOCKED_SVG = '<svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>';
+
+    function loadConfig() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_CFG);
+        if (raw) return JSON.parse(raw);
+      } catch (e) {}
+      return JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+    }
+
+    function saveConfig() {
+      try {
+        localStorage.setItem(STORAGE_KEY_CFG, JSON.stringify(config));
+      } catch (e) {
+        alert("Browser storage is full (audio file may be too large). Use a relative MP3 filename like track1.mp3 instead.");
+      }
+    }
+
+    function loadCounts() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_COUNTS);
+        if (raw) return JSON.parse(raw);
+      } catch (e) {}
+      return { 1: 0, 2: 0 };
+    }
+
+    function saveCounts() {
+      try {
+        localStorage.setItem(STORAGE_KEY_COUNTS, JSON.stringify(playCounts));
+      } catch (e) {}
+    }
+
+    // Apply config to UI and audio elements
+    function applyConfig() {
+      els.heading.textContent = config.heading || "Listening Comprehension";
+      [1, 2].forEach(id => {
+        els.titles[id].textContent = config.tracks[id].title || `Track ${id}`;
+        const src = config.tracks[id].src || "";
+        if (els.audios[id].getAttribute("data-src") !== src) {
+          els.audios[id].src = src;
+          els.audios[id].setAttribute("data-src", src);
+          els.audios[id].load();
+        }
+      });
+      renderUI();
+    }
+
+    // Render button states and remaining play counts
+    function renderUI() {
+      [1, 2].forEach(id => {
+        const used = playCounts[id] || 0;
+        const left = Math.max(0, MAX_PLAYS - used);
+        const isThisPlaying = (activeTrack === id);
+        const isAnyPlaying = (activeTrack !== null);
+        const btn = els.btns[id];
+        const card = els.cards[id];
+        const status = els.statuses[id];
+
+        card.classList.toggle("is-playing", isThisPlaying);
+        btn.classList.toggle("playing", isThisPlaying);
+
+        if (isThisPlaying) {
+          btn.innerHTML = PLAYING_SVG;
+          btn.disabled = true; // Cannot click to pause!
+          status.textContent = "Playing... (cannot pause)";
+          status.className = "status-text active";
+        } else if (left === 0) {
+          btn.innerHTML = LOCKED_SVG;
+          btn.disabled = true;
+          status.textContent = "Unavailable (0 plays left)";
+          status.className = "status-text locked";
+        } else {
+          btn.innerHTML = PLAY_SVG;
+          // Prevent starting Track 2 while Track 1 is actively playing
+          btn.disabled = isAnyPlaying;
+          status.textContent = left === 1 ? "1 play left" : `${left} plays left`;
+          status.className = "status-text";
+        }
+      });
+    }
+
+    // Setup strict playback enforcement on both audio elements
+    [1, 2].forEach(id => {
+      const audio = els.audios[id];
+
+      // 1. Lock playback speed strictly to 1.0x
+      audio.defaultPlaybackRate = 1.0;
+      audio.playbackRate = 1.0;
+      audio.addEventListener("ratechange", () => {
+        if (audio.playbackRate !== 1.0) {
+          audio.playbackRate = 1.0;
+        }
+      });
+
+      // 2. Prevent pausing once started
+      audio.addEventListener("pause", () => {
+        if (intendedPlaying[id] && !audio.ended) {
+          audio.play().catch(() => {});
+        }
+      });
+
+      // 3. Prevent seeking / scrubbing via console or media keys
+      audio.addEventListener("timeupdate", () => {
+        if (intendedPlaying[id]) {
+          // Allow normal forward progression, block jumps
+          if (Math.abs(audio.currentTime - lastKnownTime[id]) > 1.5) {
+            audio.currentTime = lastKnownTime[id];
+          } else {
+            lastKnownTime[id] = audio.currentTime;
+          }
+        }
+      });
+
+      audio.addEventListener("seeking", () => {
+        if (intendedPlaying[id] && Math.abs(audio.currentTime - lastKnownTime[id]) > 0.5) {
+          audio.currentTime = lastKnownTime[id];
+        }
+      });
+
+      // 4. Handle track completion
+      audio.addEventListener("ended", () => {
+        intendedPlaying[id] = false;
+        activeTrack = null;
+        lastKnownTime[id] = 0;
+        audio.currentTime = 0;
+        renderUI();
+      });
+
+      // 5. Handle missing audio error gracefully (do not consume a play if file failed to load)
+      audio.addEventListener("error", () => {
+        if (intendedPlaying[id]) {
+          intendedPlaying[id] = false;
+          activeTrack = null;
+          playCounts[id] = Math.max(0, (playCounts[id] || 1) - 1);
+          saveCounts();
+          renderUI();
+          alert(`Could not load audio for "${config.tracks[id].title}". Please check that the MP3 file is uploaded or configured in Teacher Login.`);
+        }
+      });
+
+      // Play Button Click Handler
+      els.btns[id].addEventListener("click", () => {
+        if (activeTrack !== null) return;
+        const used = playCounts[id] || 0;
+        if (used >= MAX_PLAYS) return;
+
+        if (!config.tracks[id].src) {
+          alert(`No audio file is set for "${config.tracks[id].title}" yet.`);
+          return;
+        }
+
+        // Count play immediately upon starting so refreshing mid-track doesn't grant free replays
+        playCounts[id] = used + 1;
+        saveCounts();
+
+        activeTrack = id;
+        intendedPlaying[id] = true;
+        lastKnownTime[id] = 0;
+        audio.currentTime = 0;
+        audio.playbackRate = 1.0;
+
+        renderUI();
+
+        audio.play().catch(err => {
+          // Revert count if browser blocked playback before starting
+          intendedPlaying[id] = false;
+          activeTrack = null;
+          playCounts[id] = Math.max(0, playCounts[id] - 1);
+          saveCounts();
+          renderUI();
+          alert("Playback could not start. Please ensure the MP3 file exists and try clicking Play again.");
+        });
+      });
+    });
+
+    // Block keyboard shortcuts (Spacebar / MediaPlayPause) from pausing active playback
+    window.addEventListener("keydown", (e) => {
+      if (activeTrack !== null && (e.code === "Space" || e.key === "MediaPlayPause")) {
+        if (document.activeElement.tagName !== "INPUT") {
+          e.preventDefault();
+        }
+      }
+    });
+
+    // Periodic watchdog to enforce 1.0x speed and continuous playback
+    setInterval(() => {
+      if (activeTrack !== null) {
+        const audio = els.audios[activeTrack];
+        if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;
+        if (intendedPlaying[activeTrack] && audio.paused && !audio.ended) {
+          audio.play().catch(() => {});
+        }
+      }
+    }, 300);
+
+    // =========================================================================
+    // TEACHER LOGIN & SETTINGS MODAL LOGIC
+    // =========================================================================
+    els.openTeacherBtn.addEventListener("click", () => {
+      els.pinInput.value = "";
+      els.loginError.style.display = "none";
+      els.loginView.style.display = "block";
+      els.settingsView.style.display = "none";
+      els.modalTitle.textContent = "Teacher Login";
+      els.modal.classList.add("open");
+      setTimeout(() => els.pinInput.focus(), 50);
+    });
+
+    els.closeModalBtn.addEventListener("click", () => {
+      els.modal.classList.remove("open");
+    });
+
+    els.modal.addEventListener("click", (e) => {
+      if (e.target === els.modal) els.modal.classList.remove("open");
+    });
+
+    function attemptLogin() {
+      if (els.pinInput.value.trim() === config.pin) {
+        els.loginError.style.display = "none";
+        els.loginView.style.display = "none";
+        els.settingsView.style.display = "block";
+        els.modalTitle.textContent = "Teacher Content Settings";
+
+        // Populate current values
+        els.headingInput.value = config.heading;
+        els.titleInput1.value = config.tracks[1].title;
+        els.urlInput1.value = config.tracks[1].src.startsWith("data:") ? "" : config.tracks[1].src;
+        els.fileInput1.value = "";
+
+        els.titleInput2.value = config.tracks[2].title;
+        els.urlInput2.value = config.tracks[2].src.startsWith("data:") ? "" : config.tracks[2].src;
+        els.fileInput2.value = "";
+
+        els.newPinInput.value = config.pin;
+      } else {
+        els.loginError.style.display = "block";
+      }
+    }
+
+    els.loginSubmitBtn.addEventListener("click", attemptLogin);
+    els.pinInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") attemptLogin();
+    });
+
+    // Helper to read uploaded file as Data URL
+    function readFileAsDataURL(fileInput) {
+      return new Promise((resolve) => {
+        if (fileInput.files && fileInput.files[0]) {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.readAsDataURL(fileInput.files[0]);
+        } else {
+          resolve(null);
+        }
+      });
+    }
+
+    els.saveSettingsBtn.addEventListener("click", async () => {
+      const dataUrl1 = await readFileAsDataURL(els.fileInput1);
+      const dataUrl2 = await readFileAsDataURL(els.fileInput2);
+
+      config.heading = els.headingInput.value.trim() || "Listening Comprehension";
+      config.tracks[1].title = els.titleInput1.value.trim() || "Track 1";
+      config.tracks[2].title = els.titleInput2.value.trim() || "Track 2";
+
+      if (dataUrl1) {
+        config.tracks[1].src = dataUrl1;
+      } else if (els.urlInput1.value.trim()) {
+        config.tracks[1].src = els.urlInput1.value.trim();
+      }
+
+      if (dataUrl2) {
+        config.tracks[2].src = dataUrl2;
+      } else if (els.urlInput2.value.trim()) {
+        config.tracks[2].src = els.urlInput2.value.trim();
+      }
+
+      const newPin = els.newPinInput.value.trim();
+      if (newPin) config.pin = newPin;
+
+      saveConfig();
+      applyConfig();
+      els.modal.classList.remove("open");
+    });
+
+    els.resetCountsBtn.addEventListener("click", () => {
+      playCounts = { 1: 0, 2: 0 };
+      saveCounts();
+      renderUI();
+      alert("Play counts reset to 0/2 for both tracks.");
+    });
+
+    // Export standalone HTML with current config baked into DEFAULT_CONFIG
+    els.exportHtmlBtn.addEventListener("click", async () => {
+      // First apply any pending edits
+      const dataUrl1 = await readFileAsDataURL(els.fileInput1);
+      const dataUrl2 = await readFileAsDataURL(els.fileInput2);
+
+      config.heading = els.headingInput.value.trim() || "Listening Comprehension";
+      config.tracks[1].title = els.titleInput1.value.trim() || "Track 1";
+      config.tracks[2].title = els.titleInput2.value.trim() || "Track 2";
+      if (dataUrl1) config.tracks[1].src = dataUrl1;
+      else if (els.urlInput1.value.trim()) config.tracks[1].src = els.urlInput1.value.trim();
+
+      if (dataUrl2) config.tracks[2].src = dataUrl2;
+      else if (els.urlInput2.value.trim()) config.tracks[2].src = els.urlInput2.value.trim();
+
+      const newPin = els.newPinInput.value.trim();
+      if (newPin) config.pin = newPin;
+
+      saveConfig();
+      applyConfig();
+
+      const currentDocHtml = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+      const updatedHtml = currentDocHtml.replace(
+        /const DEFAULT_CONFIG = \{[\s\S]*?\n    \};/,
+        `const DEFAULT_CONFIG = ${JSON.stringify(config, null, 6)};`
+      );
+
+      const blob = new Blob([updatedHtml], { type: "text/html;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "index.html";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    // Initialize on page load
+    applyConfig();
+  </script>
+</body>
+</html>
